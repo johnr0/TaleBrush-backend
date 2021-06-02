@@ -77,12 +77,19 @@ class TextDataset(Dataset):
 
             self.examples = []
             with open(file_path, encoding="utf-8") as f:
-                text = f.read()
+                while True:
+                    line = f.readline()
+                    if not line: 
+                        break
+                    tokenized_text = tokenizer.convert_tokens_to_ids(tokenizer.tokenize(line))
+                    self.examples.append(tokenizer.build_inputs_with_special_tokens(tokenized_text))
 
-            tokenized_text = tokenizer.convert_tokens_to_ids(tokenizer.tokenize(text))
+                # text = f.read()
+            
+            # tokenized_text = tokenizer.convert_tokens_to_ids(tokenizer.tokenize(text))
 
-            for i in range(0, len(tokenized_text)-block_size+1, block_size): # Truncate in block of block_size
-                self.examples.append(tokenizer.build_inputs_with_special_tokens(tokenized_text[i:i+block_size]))
+            # for i in range(0, len(tokenized_text)-block_size+1, block_size): # Truncate in block of block_size
+            #     self.examples.append(tokenizer.build_inputs_with_special_tokens(tokenized_text[i:i+block_size]))
             # Note that we are loosing the last truncated example here for the sake of simplicity (no padding)
             # If your dataset is small, first you should loook for a bigger one :-) and second you
             # can change this behavior by adding (model specific) padding.
