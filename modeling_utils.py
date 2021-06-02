@@ -979,7 +979,7 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin):
 
         while cur_len < max_length:
             model_inputs = self.prepare_inputs_for_generation(input_ids, past=past)
-            print('input_ids:', input_ids)
+            # print('input_ids:', input_ids)
             if not(pad_lens is None):
                 model_inputs["pad_lens"] = pad_lens
             if not(gpt3_api_key is None):
@@ -1093,10 +1093,10 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin):
 
             if not (gedi_model is None):
                 gedi_past = gedi_outputs[1]
-                print('gedi_past:', gedi_past)
+                # print('gedi_past:', gedi_past)
             if gpt3_api_key is None:
                 past = outputs[1]
-                print('past:', past)
+                # print('past:', past)
 
             max = torch.max(next_token_logits,-1,keepdim=True)
             max=max[0]
