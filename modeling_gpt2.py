@@ -9,7 +9,8 @@ import torch
 import torch.nn as nn
 from torch.nn import CrossEntropyLoss
 
-from transformers.configuration_gpt2 import GPT2Config
+# from transformers.configuration_gpt2 import GPT2Config
+from transformers import GPT2Config
 from transformers.file_utils import add_start_docstrings, add_start_docstrings_to_callable
 # from transformers.modeling_utils import Conv1D, PreTrainedModel, SequenceSummary, prune_conv1d_layer
 from modeling_utils import Conv1D, PreTrainedModel, SequenceSummary, prune_conv1d_layer
@@ -559,7 +560,6 @@ class GPT2Model(GPT2PreTrainedModel):
             outputs = outputs + (all_attentions,)
         return outputs  # last hidden state, (presents), (all hidden_states), (attentions)
 
-
 @add_start_docstrings(
     """The GPT2 Model transformer with a language modeling head on top
     (linear layer with weights tied to the input embeddings). """,
@@ -681,6 +681,7 @@ class GPT2LMHeadModel(GPT2PreTrainedModel):
         #ignores the p_dist_over_vocab part
 
         return outputs  # (loss), lm_logits, presents, (all hidden_states), (attentions)
+
 
 
 @add_start_docstrings(
