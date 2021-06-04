@@ -359,7 +359,7 @@ class GPT2Model(GPT2PreTrainedModel):
         for layer, heads in heads_to_prune.items():
             self.h[layer].attn.prune_heads(heads)
 
-    @add_start_docstrings_to_callable(GPT2_INPUTS_DOCSTRING)
+    @add_start_docstrings_to_model_forward(GPT2_INPUTS_DOCSTRING)
     def forward(
         self,
         input_ids=None,
