@@ -984,46 +984,53 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin):
             if not(multi_code is None):
                 seq_a2 = torch.LongTensor(multi_code).unsqueeze(0).to(seq_a.device)
 
+                secondary_code = tokenizer.decode(multi_code[0])
                 # # John: below added to get extreme points
-                id_100 = tokenizer.encode('100')[0]
-                id_50 = tokenizer.encode('50')[0]
-                id_0 = tokenizer.encode('0')[0]
-                seq_a2 = torch.LongTensor(id_100).unsqueeze(0).to(seq_a.device)
-                seq_a3 = torch.LongTensor(id_50).unsqueeze(0).to(seq_a.device)
-                seq_a4 = torch.LongTensor(id_0).unsqueeze(0).to(seq_a.device)
+                id_100 = tokenizer.encode('100')
+                id_50 = tokenizer.encode('50')
+                id_0 = tokenizer.encode('0')
+                seq_100 = torch.LongTensor(id_100).unsqueeze(0).to(seq_a.device)
+                seq_50 = torch.LongTensor(id_50).unsqueeze(0).to(seq_a.device)
+                seq_0 = torch.LongTensor(id_0).unsqueeze(0).to(seq_a.device)
 
+                all_embeddings = gedi_model.get_input_embeddings()                
+                embed100 = all_embeddings(seq_100)
+                embed50 = all_embeddings(seq_50)
+                embed0 = all_embeddings(seq_0)
+
+                if secondary_code=='100':
+                    embed = embed100
+                elif secondary_code=='50':
+                    embed = embed50
+                elif secondary_code=='0':
+                    embed = embed0
+                elif int(secondary_code)>0 and int(secondary_code)<50:
+                    sc = int(secondary_code)
+                    ratio1 = sc/50
+                    ratio2 = 1-sc/50
+                    embed = ratio1*embed50 + ratio2*embed0
+                elif int(secondary_code)>50 and int(secondary_code)<100:
+                    sc = int(secondary_code)
+                    ratio1 = (100-sc)/50
+                    ratio2 = (sc-50)/50
+                    embed = ratio1*embed50 + ratio2*embed100
+                
+
+
+ 
+
+                # print(embed)
+                # print(embed.size())
+                
+                # origin
                 seq_a = torch.cat((seq_a, seq_a2, input_ids), dim=1)[:,:]
                 seq_b = torch.cat((seq_b, seq_a2, input_ids), dim=1)[:,:]
 
-                inputs = gedi_model.prepare_inputs_for_generation(seq_batched, past=gedi_past)
-                inputs["pad_lens"] = gedi_pad_lens
-
-                print('multicode seq_a:',seq_a)
-                print('multicode seq_b:',seq_b)
-                print('purpose above: to check if the length of token is two')
-
-                # John: below added to get extreme points
-                seq_a2_i = torch.cat((seq_a, seq_a2, input_ids), dim=1)[:,:]
-                seq_b2_i = torch.cat((seq_b, seq_a2, input_ids), dim=1)[:,:]
-
-                seq_a3_i = torch.cat((seq_a, seq_a3, input_ids), dim=1)[:,:]
-                seq_b3_i = torch.cat((seq_b, seq_a3, input_ids), dim=1)[:,:]
-
-                seq_a4_i = torch.cat((seq_a, seq_a4, input_ids), dim=1)[:,:]
-                seq_b4_i = torch.cat((seq_b, seq_a4, input_ids), dim=1)[:,:]
-
-                seq_embeddings = torch.cat((seq_a2_i, seq_b2_i, seq_a3_i, seq_b3_i, seq_a4_i, seq_b4_i), dim=0)
-
-                print('seq_embeddings size:', seq_embeddings.size())
-
-                embedding_inputs = gedi_model.prepare_inputs_for_generation(seq_embeddings, past=gedi_past)
-                embedding_inputs["pad_lens"] = gedi_pad_lens
-
-                embedding_outputs = gedi_model(**embedding_inputs)
-                embedding_hidden_states= embedding_outputs.hidden_states
-                
-                
-
+                # print('multicode seq_a:',seq_a)
+                # print('multicode seq_a size:',seq_a.size())
+                # print('multicode seq_b:',seq_b)
+                # print('multicode seq_b size:', seq_b.size())
+                # print('purpose above: to check if the length of token is two')
             else:
 
                 seq_a = torch.cat((seq_a, input_ids), dim=1)[:,:]
@@ -1066,11 +1073,20 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin):
                 if not gedi_past is None:
                     input_batched = torch.cat((model_inputs["input_ids"],model_inputs["input_ids"]),dim=0)
                     seq_batched = torch.cat((seq_batched,input_batched),dim=1)
-                    inputs = gedi_model.prepare_inputs_for_generation(seq_batched, past=gedi_past)
-                    inputs["pad_lens"] = gedi_pad_lens
+                    batched_embedding = all_embeddings(seq_batched)
+                    # print('batched embedding:', batched_embedding.size())
+                    batched_embedding[0][1]=embed
+                    batched_embedding[1][1]=embed
+                    inputs = {"inputs_embeds": batched_embedding, "pad_lens": gedi_pad_lens, "past":gedi_past}
+                    # inputs = gedi_model.prepare_inputs_for_generation(seq_batched, past=gedi_past)
+                    # inputs["pad_lens"] = gedi_pad_lens
                 else:
-
-                    inputs = {"input_ids": seq_batched, "pad_lens": gedi_pad_lens, "past":gedi_past}
+                    batched_embedding = all_embeddings(seq_batched)
+                    # print('batched embedding:', batched_embedding.size())
+                    batched_embedding[0][1]=embed
+                    batched_embedding[1][1]=embed
+                    inputs = {"inputs_embeds": batched_embedding, "pad_lens": gedi_pad_lens, "past":gedi_past}
+                    # inputs = {"input_ids": seq_batched, "pad_lens": gedi_pad_lens, "past":gedi_past}
 
                 gedi_outputs = gedi_model(**inputs)
                 if gedi_past is None:

@@ -606,6 +606,7 @@ class GPT2LMHeadModel(GPT2PreTrainedModel):
         head_mask=None,
         inputs_embeds=None,
         labels=None,
+        encoder_hidden_states=None, 
     ):
         r"""
         labels (:obj:`torch.LongTensor` of shape :obj:`(batch_size, sequence_length)`, `optional`, defaults to :obj:`None`):
@@ -659,12 +660,16 @@ class GPT2LMHeadModel(GPT2PreTrainedModel):
             position_ids=position_ids,
             head_mask=head_mask,
             inputs_embeds=inputs_embeds,
+            # encoder_hidden_states=encoder_hidden_states,
         )
+        
         hidden_states = transformer_outputs[0]
 
+        # print(hidden_state.size())
         lm_logits = self.lm_head(hidden_states)
 
         outputs = (lm_logits,) + transformer_outputs[1:]
+        # print(lm_logits.size())
         if labels is not None:
             # Shift so that tokens < n predict n
             shift_logits = lm_logits[..., :-1, :].contiguous()
@@ -674,6 +679,9 @@ class GPT2LMHeadModel(GPT2PreTrainedModel):
             #import ipdb; ipdb.set_trace()
             loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
             outputs = (loss,) + outputs
+        
+        # if encoder_hidden_states is not None:
+        #     print('encoder_hidden_stattes not none')
 
         #one way to make this work for BalancedDataParallel
         #is to simply return loss and not rest of output
