@@ -992,6 +992,13 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin):
                 seq_a = torch.cat((seq_a, seq_a2, input_ids), dim=1)[:,:]
                 seq_b = torch.cat((seq_b, seq_a2, input_ids), dim=1)[:,:]
 
+                inputs = gedi_model.prepare_inputs_for_generation(seq_batched, past=gedi_past)
+                inputs["pad_lens"] = gedi_pad_lens
+
+                print('multicode seq_a:',seq_a)
+                print('multicode seq_b:',seq_b)
+                print('purpose above: to check if the length of token is two')
+
                 # John: below added to get extreme points
                 seq_a2_i = torch.cat((seq_a, seq_a2, input_ids), dim=1)[:,:]
                 seq_b2_i = torch.cat((seq_b, seq_a2, input_ids), dim=1)[:,:]
@@ -1004,14 +1011,15 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin):
 
                 seq_embeddings = torch.cat((seq_a2_i, seq_b2_i, seq_a3_i, seq_b3_i, seq_a4_i, seq_b4_i), dim=0)
 
-                inputs = gedi_model.prepare_inputs_for_generation(seq_batched, past=gedi_past)
-                inputs["pad_lens"] = gedi_pad_lens
-
-
-                print('multicode seq_a:',seq_a)
-                print('multicode seq_b:',seq_b)
-                print('purpose above: to check if the length of token is two')
                 print('seq_embeddings size:', seq_embeddings.size())
+
+                embedding_inputs = gedi_model.prepare_inputs_for_generation(seq_embeddings, past=gedi_past)
+                embedding_inputs["pad_lens"] = gedi_pad_lens
+
+                embedding_outputs = gedi_model(**embedding_inputs)
+                embedding_hidden_states= embedding_outputs.hidden_states
+                
+                
 
             else:
 
