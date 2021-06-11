@@ -985,33 +985,21 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin):
                 seq_a2 = torch.LongTensor(multi_code).unsqueeze(0).to(seq_a.device)
 
                 # # John: below added to get extreme points
-                seq_a2 = torch.LongTensor('100').unsqueeze(0).to(seq_a.device)
-                seq_a3 = torch.LongTensor('50').unsqueeze(0).to(seq_a.device)
-                seq_a4 = torch.LongTensor('0').unsqueeze(0).to(seq_a.device)
+                # seq_a2 = torch.LongTensor('50').unsqueeze(0).to(seq_a.device)
+                # seq_a3 = torch.LongTensor('50').unsqueeze(0).to(seq_a.device)
+                # seq_a4 = torch.LongTensor('0').unsqueeze(0).to(seq_a.device)
 
                 seq_a = torch.cat((seq_a, seq_a2, input_ids), dim=1)[:,:]
                 seq_b = torch.cat((seq_b, seq_a2, input_ids), dim=1)[:,:]
 
                 # John: below added to get extreme points
-                seq_a2_i = torch.cat((seq_a, seq_a2, input_ids), dim=1)[:,:]
-                seq_b2_i = torch.cat((seq_b, seq_a2, input_ids), dim=1)[:,:]
-
-                seq_a3_i = torch.cat((seq_a, seq_a3, input_ids), dim=1)[:,:]
-                seq_b3_i = torch.cat((seq_b, seq_a3, input_ids), dim=1)[:,:]
-
-                seq_a4_i = torch.cat((seq_a, seq_a4, input_ids), dim=1)[:,:]
-                seq_b4_i = torch.cat((seq_b, seq_a4, input_ids), dim=1)[:,:]
-
-                seq_embeddings = torch.cat((seq_a2_i, seq_b2_i, seq_a3_i, seq_b3_i, seq_a4_i, seq_b4_i), dim=0)
-
-                inputs = gedi_model.prepare_inputs_for_generation(seq_batched, past=gedi_past)
-                inputs["pad_lens"] = gedi_pad_lens
+                seq_a = torch.cat((seq_a, seq_a2, input_ids), dim=1)[:,:]
+                seq_b = torch.cat((seq_b, seq_a2, input_ids), dim=1)[:,:]
 
 
-                print('multicode seq_a:',seq_a)
-                print('multicode seq_b:',seq_b)
-                print('purpose above: to check if the length of token is two')
-                print('seq_embeddings size:', seq_embeddings.size())
+                # print('multicode seq_a:',seq_a)
+                # print('multicode seq_b:',seq_b)
+                # print('purpose above: to check if the length of token is two')
 
             else:
 
@@ -1024,7 +1012,6 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin):
             if pad_lens is None:
 
                 gedi_pad_lens = None
-                
             else:
                 gedi_pad_lens = pad_lens+pad_lens
 
