@@ -1077,7 +1077,7 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin):
                     # print('batched embedding:', batched_embedding.size())
                     batched_embedding[0][1]=embed
                     batched_embedding[1][1]=embed
-                    inputs = {"inputs_embeds": batched_embedding, "pad_lens": gedi_pad_lens, "past":gedi_past}
+                    inputs = {"inputs_embeds": batched_embedding, "pad_lens": gedi_pad_lens}
                     # inputs = gedi_model.prepare_inputs_for_generation(seq_batched, past=gedi_past)
                     # inputs["pad_lens"] = gedi_pad_lens
                 else:
