@@ -985,9 +985,12 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin):
                 seq_a2 = torch.LongTensor(multi_code).unsqueeze(0).to(seq_a.device)
 
                 # # John: below added to get extreme points
-                seq_a2 = torch.LongTensor('100').unsqueeze(0).to(seq_a.device)
-                seq_a3 = torch.LongTensor('50').unsqueeze(0).to(seq_a.device)
-                seq_a4 = torch.LongTensor('0').unsqueeze(0).to(seq_a.device)
+                id_100 = tokenizer.encode('100')[0]
+                id_50 = tokenizer.encode('50')[0]
+                id_0 = tokenizer.encode('0')[0]
+                seq_a2 = torch.LongTensor(id_100).unsqueeze(0).to(seq_a.device)
+                seq_a3 = torch.LongTensor(id_50).unsqueeze(0).to(seq_a.device)
+                seq_a4 = torch.LongTensor(id_0).unsqueeze(0).to(seq_a.device)
 
                 seq_a = torch.cat((seq_a, seq_a2, input_ids), dim=1)[:,:]
                 seq_b = torch.cat((seq_b, seq_a2, input_ids), dim=1)[:,:]
