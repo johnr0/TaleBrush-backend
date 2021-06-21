@@ -690,6 +690,7 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin):
         bos_token_id=None,
         pad_token_id=None,
         eos_token_ids=None,
+        bad_token_ids = None, 
         length_penalty=None,
         num_return_sequences=None,
         penalize_cond=False,
@@ -866,6 +867,7 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin):
             rep_penalty_scale,
             pad_token_id,
             eos_token_ids,
+            bad_token_ids,
             effective_batch_size,
             penalize_cond,
             gedi_model,
@@ -937,6 +939,7 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin):
         rep_penalty_scale,
         pad_token_id,
         eos_token_ids,
+        bad_token_ids,
         batch_size,
         penalize_cond,
         gedi_model,
@@ -985,35 +988,50 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin):
                 seq_a2 = torch.LongTensor(multi_code).unsqueeze(0).to(seq_a.device)
 
                 secondary_code = tokenizer.decode(multi_code[0])
-                # # John: below added to get extreme points
-                id_100 = tokenizer.encode('100')
-                id_50 = tokenizer.encode('50')
-                id_0 = tokenizer.encode('0')
+                # # # John: below added to get extreme points
+                # id_100 = tokenizer.encode('100')
+                # id_50 = tokenizer.encode('50')
+                # id_0 = tokenizer.encode('0')
+                # seq_100 = torch.LongTensor(id_100).unsqueeze(0).to(seq_a.device)
+                # seq_50 = torch.LongTensor(id_50).unsqueeze(0).to(seq_a.device)
+                # seq_0 = torch.LongTensor(id_0).unsqueeze(0).to(seq_a.device)
+
+                id_100 = tokenizer.encode('positive')
+                id_0 = tokenizer.encode('negative')
                 seq_100 = torch.LongTensor(id_100).unsqueeze(0).to(seq_a.device)
-                seq_50 = torch.LongTensor(id_50).unsqueeze(0).to(seq_a.device)
                 seq_0 = torch.LongTensor(id_0).unsqueeze(0).to(seq_a.device)
+
+
+                # all_embeddings = gedi_model.get_input_embeddings()                
+                # embed100 = all_embeddings(seq_100)
+                # embed50 = all_embeddings(seq_50)
+                # embed0 = all_embeddings(seq_0)
 
                 all_embeddings = gedi_model.get_input_embeddings()                
                 embed100 = all_embeddings(seq_100)
-                embed50 = all_embeddings(seq_50)
                 embed0 = all_embeddings(seq_0)
 
                 if secondary_code=='100':
                     embed = embed100
-                elif secondary_code=='50':
-                    embed = embed50
+                # elif secondary_code=='50':
+                #     embed = embed50
                 elif secondary_code=='0':
                     embed = embed0
-                elif int(secondary_code)>0 and int(secondary_code)<50:
+                else: 
                     sc = int(secondary_code)
-                    ratio1 = sc/50
-                    ratio2 = 1-sc/50
-                    embed = ratio1*embed50 + ratio2*embed0
-                elif int(secondary_code)>50 and int(secondary_code)<100:
-                    sc = int(secondary_code)
-                    ratio1 = (100-sc)/50
-                    ratio2 = (sc-50)/50
-                    embed = ratio1*embed50 + ratio2*embed100
+                    ratio1 = sc/100
+                    ratio2 = 1-sc/100
+                    embed = ratio1*embed100 + ratio2*embed0
+                # elif int(secondary_code)>0 and int(secondary_code)<50:
+                #     sc = int(secondary_code)
+                #     ratio1 = sc/50
+                #     ratio2 = 1-sc/50
+                #     embed = ratio1*embed50 + ratio2*embed0
+                # elif int(secondary_code)>50 and int(secondary_code)<100:
+                #     sc = int(secondary_code)
+                #     ratio1 = (100-sc)/50
+                #     ratio2 = (sc-50)/50
+                #     embed = ratio1*embed50 + ratio2*embed100
                 
 
 
@@ -1023,8 +1041,14 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin):
                 # print(embed.size())
                 
                 # origin
-                seq_a = torch.cat((seq_a, seq_a2, input_ids), dim=1)[:,:]
-                seq_b = torch.cat((seq_b, seq_a2, input_ids), dim=1)[:,:]
+                # John: 6/21 commented below
+                # seq_a = torch.cat((seq_a, seq_a2, input_ids), dim=1)[:,:]
+                # seq_b = torch.cat((seq_b, seq_a2, input_ids), dim=1)[:,:]
+
+                init_gd_input = input_ids[input_ids!=bad_token_ids[0]]
+                init_gd_input = init_gd_input.reshape((1, init_gd_input.size(0)))
+                seq_a = torch.cat((seq_a, seq_a2, init_gd_input), dim=1)[:,:]
+                seq_b = torch.cat((seq_b, seq_a2, init_gd_input), dim=1)[:,:]
 
                 # print('multicode seq_a:',seq_a)
                 # print('multicode seq_a size:',seq_a.size())
@@ -1056,6 +1080,7 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin):
         while cur_len < max_length:
             model_inputs = self.prepare_inputs_for_generation(input_ids, past=past)
             # print('input_ids:', input_ids)
+            # print(model_inputs)
             if not(pad_lens is None):
                 model_inputs["pad_lens"] = pad_lens
             if not(gpt3_api_key is None):
@@ -1071,8 +1096,22 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin):
             if not(gedi_model is None):
                 #want to compute LM loss here so feeding inputs as labels
                 if not gedi_past is None:
-                    input_batched = torch.cat((model_inputs["input_ids"],model_inputs["input_ids"]),dim=0)
+                    # 
+                    gd_input = model_inputs['input_ids'].clone().detach()
+                    # print('gd_input', gd_input)
+                    gd_input = gd_input[gd_input!=bad_token_ids[0]]
+                    # print('gd_input', gd_input)
+                    if len(gd_input.size())==1:
+                        gd_input = gd_input.reshape(1, gd_input.size(0))
+                    # print('gd_input', gd_input)
+
+                    input_batched = torch.cat((gd_input, gd_input),dim=0)
+
+
+                    # input_batched = torch.cat((model_inputs["input_ids"],model_inputs["input_ids"]),dim=0)
+                    
                     seq_batched = torch.cat((seq_batched,input_batched),dim=1)
+
                     batched_embedding = all_embeddings(seq_batched)
                     # print('batched embedding:', batched_embedding.size())
                     batched_embedding[0][1]=embed
@@ -1132,6 +1171,7 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin):
 
                 logits_pos,logits_neg = torch.split(gedi_logits/seq_len,input_ids.shape[0])
                 logits = torch.stack((logits_pos,logits_neg),2)
+                
                 if "logit_scale" in dir(gedi_model):
                     logits = gedi_model.logit_scale*logits
 
@@ -1143,7 +1183,7 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin):
 
                 logp_desired_t = torch.log_softmax(logits,-1)[:,:,0]
                 logp_undesired_t = torch.log_softmax(logits,-1)[:,:,1]
-
+                # print(logp_desired_t.size())
                 next_token_logits = torch.log_softmax(1*next_token_logits,-1) + disc_weight*(logp_desired_t) #+delta_capped82058721
 
                 sorted_logps, sorted_indices = torch.sort(logp_desired_t, descending=False)
@@ -1189,12 +1229,58 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin):
             next_token_logits= next_token_logits - max + rep_penalty_scale
 
 
-            if repetition_penalty != 1.0:
-                next_token_logits_penalties = _create_next_token_logits_penalties(
-                    input_ids, next_token_logits, repetition_penalty
-                )
-                next_token_logits = tf.math.multiply(next_token_logits, next_token_logits_penalties)
+            # if repetition_penalty!=1.0:
+            #     score = torch.gather(scores, 1, input_ids)
 
+            #     # if score < 0 then repetition penalty has to be multiplied to reduce the previous token probability
+            #     score = torch.where(score < 0, score * self.penalty, score / self.penalty)
+
+            #     scores.scatter_(1, input_ids, score)
+
+            ########################################################################
+            # # repetition penalty from CTRL paper (https://arxiv.org/abs/1909.05858)
+            if repetition_penalty != 1.0:
+                for i in range(batch_size):
+
+                    prevs = input_ids[i][cond_len:].tolist()
+
+                    for j in range(0,len(prevs)):
+                        previous_token = prevs[j]
+                        if previous_token<next_token_logits.size(1):
+                            if rep_penalty_scale>0:
+
+
+                                if  next_token_logits[i, previous_token] == rep_penalty_scale:
+                                    rescale=True
+                                else:
+                                    rescale=False
+
+
+
+
+                                next_token_logits[i, previous_token] /= repetition_penalty
+                            #original version accidentally put rescaling inside forloop over prevs, this is slow and only changes things is max logit is penalized
+                            #conditonal replicates paper results but is faster
+                            #can comment out to remove, makes very small difference, generation sometimes the same
+                                if rescale:
+
+                                    max = torch.max(next_token_logits[i,:])
+                                    next_token_logits[i,:]= next_token_logits[i,:]- max + rep_penalty_scale
+
+
+
+                            else:
+
+
+                                if next_token_logits[i, previous_token] < 0:
+                                    next_token_logits[i, previous_token] *= repetition_penalty
+                                else:
+                                    next_token_logits[i, previous_token] /= repetition_penalty
+            ########################################################################
+
+
+
+            ########################################################################
             # # repetition penalty from CTRL paper (https://arxiv.org/abs/1909.05858)
             # if repetition_penalty != 1.0:
             #     for i in range(batch_size):
@@ -1233,7 +1319,7 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin):
             #                     next_token_logits[i, previous_token] *= repetition_penalty
             #                 else:
             #                     next_token_logits[i, previous_token] /= repetition_penalty
-
+            ########################################################################
 
 
 
@@ -1244,6 +1330,11 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin):
                 banned_tokens = calc_banned_ngram_tokens(input_ids[cond_len:], batch_size, no_repeat_ngram_size, len(input_ids[cond_len:]))
                 for batch_idx in range(batch_size):
                     next_token_logits[batch_idx, banned_tokens[batch_idx]] = -float("inf")
+            
+            if len(bad_token_ids)!=0:
+                for i in range(batch_size):
+                    for bt_id in bad_token_ids:
+                        next_token_logits[i, bt_id] = -float("inf")
 
 
             if not(gedi_model is None):
@@ -1280,12 +1371,14 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin):
 
             # update generations and finished sentences
             tokens_to_add = next_token * unfinished_sents + pad_token_id * (1 - unfinished_sents)
+            # print(tokens_to_add)
             if get_ll:
                 sequence_ll += next_token_logp[0,next_token]
             input_ids = torch.cat([input_ids, tokens_to_add.unsqueeze(-1)], dim=-1)
             for eos_token_id in eos_token_ids:
                 unfinished_sents.mul_(tokens_to_add.ne(eos_token_id).long())
             cur_len = cur_len + 1
+            # print(input_ids)
 
             # stop when there is a </s> in each sentence, or if we exceed the maximul length
             if unfinished_sents.max() == 0:
@@ -1697,16 +1790,3 @@ def prune_layer(layer, index, dim=None):
         return prune_conv1d_layer(layer, index, dim=1 if dim is None else dim)
     else:
         raise ValueError("Can't prune layer of class {}".format(layer.__class__))
-
-def _create_next_token_logits_penalties(input_ids, logits, repetition_penalty):
-    # create logit penalties for already seen input_ids
-    token_penalties = np.ones(shape_list(logits))
-    prev_input_ids = [np.unique(input_id) for input_id in input_ids.numpy()]
-    for i, prev_input_id in enumerate(prev_input_ids):
-        logit_penalized = logits[i].numpy()[prev_input_id]
-        logit_penalties = np.zeros(logit_penalized.shape)
-        # if previous logit score is < 0 then multiply repetition penalty else divide
-        logit_penalties[logit_penalized < 0] = repetition_penalty
-        logit_penalties[logit_penalized > 0] = 1 / repetition_penalty
-        np.put(token_penalties[i], prev_input_id, logit_penalties)
-    return tf.convert_to_tensor(token_penalties, dtype=tf.float32)

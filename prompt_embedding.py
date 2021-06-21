@@ -56,6 +56,8 @@ class PROMPTEmbedding(nn.Module):
         pre_indices = (tokens == self.prompt_token_id).nonzero()
         if pre_indices.size(0)==0:
           return embeddings
+        if pre_indices.size(0)<sum(self.n_tokens):
+          return embeddings
         blocked_indices = (tokens == self.prompt_token_id).nonzero().reshape((tokens.shape[0], sum(self.n_tokens), 2))[:, :, 1]
         
         
