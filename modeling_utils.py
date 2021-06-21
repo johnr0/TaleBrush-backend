@@ -489,7 +489,7 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin):
                 archive_file = pretrained_model_name_or_path + ".index"
             else:
                 archive_file = hf_bucket_url(
-                    pretrained_model_name_or_path, postfix=(TF2_WEIGHTS_NAME if from_tf else WEIGHTS_NAME),
+                    pretrained_model_name_or_path, filename=WEIGHTS_NAME,
                 )
 
             # redirect to the cache, if necessary
@@ -1188,44 +1188,51 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin):
             max=max[0]
             next_token_logits= next_token_logits - max + rep_penalty_scale
 
-            # repetition penalty from CTRL paper (https://arxiv.org/abs/1909.05858)
+
             if repetition_penalty != 1.0:
-                for i in range(batch_size):
+                next_token_logits_penalties = _create_next_token_logits_penalties(
+                    input_ids, next_token_logits, repetition_penalty
+                )
+                next_token_logits = tf.math.multiply(next_token_logits, next_token_logits_penalties)
 
-                    prevs = input_ids[i][cond_len:].tolist()
+            # # repetition penalty from CTRL paper (https://arxiv.org/abs/1909.05858)
+            # if repetition_penalty != 1.0:
+            #     for i in range(batch_size):
 
-                    for j in range(0,len(prevs)):
-                        previous_token = prevs[j]
+            #         prevs = input_ids[i][cond_len:].tolist()
 
-                        if rep_penalty_scale>0:
+            #         for j in range(0,len(prevs)):
+            #             previous_token = prevs[j]
 
-
-                            if  next_token_logits[i, previous_token] == rep_penalty_scale:
-                                rescale=True
-                            else:
-                                rescale=False
+            #             if rep_penalty_scale>0:
 
 
-
-
-                            next_token_logits[i, previous_token] /= repetition_penalty
-                            #original version accidentally put rescaling inside forloop over prevs, this is slow and only changes things is max logit is penalized
-                            #conditonal replicates paper results but is faster
-                            #can comment out to remove, makes very small difference, generation sometimes the same
-                            if rescale:
-
-                                max = torch.max(next_token_logits[i,:])
-                                next_token_logits[i,:]= next_token_logits[i,:]- max + rep_penalty_scale
+            #                 if  next_token_logits[i, previous_token] == rep_penalty_scale:
+            #                     rescale=True
+            #                 else:
+            #                     rescale=False
 
 
 
-                        else:
+
+            #                 next_token_logits[i, previous_token] /= repetition_penalty
+            #                 #original version accidentally put rescaling inside forloop over prevs, this is slow and only changes things is max logit is penalized
+            #                 #conditonal replicates paper results but is faster
+            #                 #can comment out to remove, makes very small difference, generation sometimes the same
+            #                 if rescale:
+
+            #                     max = torch.max(next_token_logits[i,:])
+            #                     next_token_logits[i,:]= next_token_logits[i,:]- max + rep_penalty_scale
 
 
-                            if next_token_logits[i, previous_token] < 0:
-                                next_token_logits[i, previous_token] *= repetition_penalty
-                            else:
-                                next_token_logits[i, previous_token] /= repetition_penalty
+
+            #             else:
+
+
+            #                 if next_token_logits[i, previous_token] < 0:
+            #                     next_token_logits[i, previous_token] *= repetition_penalty
+            #                 else:
+            #                     next_token_logits[i, previous_token] /= repetition_penalty
 
 
 
@@ -1690,3 +1697,16 @@ def prune_layer(layer, index, dim=None):
         return prune_conv1d_layer(layer, index, dim=1 if dim is None else dim)
     else:
         raise ValueError("Can't prune layer of class {}".format(layer.__class__))
+
+def _create_next_token_logits_penalties(input_ids, logits, repetition_penalty):
+    # create logit penalties for already seen input_ids
+    token_penalties = np.ones(shape_list(logits))
+    prev_input_ids = [np.unique(input_id) for input_id in input_ids.numpy()]
+    for i, prev_input_id in enumerate(prev_input_ids):
+        logit_penalized = logits[i].numpy()[prev_input_id]
+        logit_penalties = np.zeros(logit_penalized.shape)
+        # if previous logit score is < 0 then multiply repetition penalty else divide
+        logit_penalties[logit_penalized < 0] = repetition_penalty
+        logit_penalties[logit_penalized > 0] = 1 / repetition_penalty
+        np.put(token_penalties[i], prev_input_id, logit_penalties)
+    return tf.convert_to_tensor(token_penalties, dtype=tf.float32)
