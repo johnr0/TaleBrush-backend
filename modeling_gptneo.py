@@ -44,10 +44,11 @@ _TOKENIZER_FOR_DOC = "GPT2Tokenizer"
 
 GPT_NEO_PRETRAINED_MODEL_ARCHIVE_LIST = [
     "EleutherAI/gpt-neo-1.3B",
+    "EleutherAI/gpt-neo-2.7B",
     # See all GPTNeo models at https://huggingface.co/models?filter=gpt_neo
 ]
 
-_CHECKPOINT_FOR_DOC = "EleutherAI/gpt-neo-1.3B"
+_CHECKPOINT_FOR_DOC = "EleutherAI/gpt-neo-2.7B"
 
 
 def load_tf_weights_in_gpt_neo(model, config, gpt_neo_checkpoint_path):
