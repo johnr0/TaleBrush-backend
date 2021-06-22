@@ -6,15 +6,15 @@ import random
 
 
 def proc_and_binarize(dir):
-    fid = open(dir+ "/train.tsv")
+    fid = open(dir+ "/train.txt")
     train= fid.read()
     train = train.split("\n")[:-1]
 
-    fid = open(dir+ "/test.tsv")
+    fid = open(dir+ "/test.txt")
     test = fid.read()
     test = test.split("\n")[:-1]
     # topics = ["world","sports","business","science"]
-    sentiments = ['0','25','50','75','100']
+    sentiments = ['negative','25','neutral','75','positive']
 
     true_test = []
     false_test = []
@@ -49,7 +49,7 @@ def proc_and_binarize(dir):
         if text[0] == " ":
             text = text[1:]
         
-        if label==1 or label==2:
+        if label==1 or label==3:
             continue
 
 
@@ -100,7 +100,7 @@ def proc_and_binarize(dir):
         if text[0] == " ":
             text = text[1:]
 
-        if label==1 or label==2:
+        if label==1 or label==3:
             continue
 
 
@@ -114,7 +114,7 @@ def proc_and_binarize(dir):
         #     choice_array = [0,1]
         elif label==4:
             choice_array = [0,2]
-            
+
         ps_label = random.choice(choice_array)
         print(choice_array)
 
@@ -141,7 +141,7 @@ def main():
     # csv.writer(open("data/AG-news/dev.tsv", 'w+'), delimiter='\t').writerows(csv.reader(open("data/AG-news/test.csv")))
 
 
-    true_train, false_train, true_test, false_test = proc_and_binarize("data/sst")
+    true_train, false_train, true_test, false_test = proc_and_binarize("./data/sst")
     random.shuffle(true_train)
     random.shuffle(false_train)
     random.shuffle(true_test)

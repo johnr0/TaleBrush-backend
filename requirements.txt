@@ -1,5 +1,6 @@
+#nsml: joshlk/deepspeed:pytorch-1.7.1-cuda-10.2
 tensorboardX
 tensorboard
 scikit-learn
 seqeval
-transformers==2.8
+transformers==4.6.0
