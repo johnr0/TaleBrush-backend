@@ -705,7 +705,6 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin):
         code_0="negative",
         code_1="positive",
         multi_code=None,
-        protagonist = None,
         get_ll=False
     ):
         r""" Generates sequences for models with a LM head. The method currently supports greedy or penalized greedy decoding, sampling with top-k or nucleus sampling
@@ -882,7 +881,6 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin):
             code_0,
             code_1,
             multi_code,
-            protagonist,
             get_ll
         )
 
@@ -955,7 +953,6 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin):
         code_0,
         code_1,
         multi_code,
-        protagonist,
         get_ll
     ):
         """ Generate sequences for each example without beam search (num_beams == 1).
@@ -992,17 +989,13 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin):
 
                 secondary_code = tokenizer.decode(multi_code[0])
                 # # # John: below added to get extreme points
-                id_100 = tokenizer.encode('good')
+                id_100 = tokenizer.encode('positive')
                 id_50 = tokenizer.encode('neutral')
-                id_0 = tokenizer.encode('bad')
+                id_0 = tokenizer.encode('negative')
                 seq_100 = torch.LongTensor(id_100).unsqueeze(0).to(seq_a.device)
                 seq_50 = torch.LongTensor(id_50).unsqueeze(0).to(seq_a.device)
                 seq_0 = torch.LongTensor(id_0).unsqueeze(0).to(seq_a.device)
 
-                if protagonist is not None:
-                    protagonist_append = 'Protagonist: '+protagonist+' # '
-                    protagonist_append_token = tokenizer.encode(protagonist_append)
-                    protagonist_append_ids = torch.LongTensor(protagonist_append_token).unsqueeze(0).to(seq_a.device)
                 # id_100 = tokenizer.encode('positive')
                 # id_0 = tokenizer.encode('negative')
                 # seq_100 = torch.LongTensor(id_100).unsqueeze(0).to(seq_a.device)
@@ -1055,14 +1048,8 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin):
                 init_gd_input = input_ids[input_ids!=bad_token_ids[1]]
                 init_gd_input = init_gd_input.reshape((1, init_gd_input.size(0)))
                 # print('init_gd_input size:', init_gd_input.size())
-                if protagonist is not None:
-                    seq_a = torch.cat((seq_a, seq_a2, protagonist_append_ids, init_gd_input), dim=1)[:,:]
-                    seq_b = torch.cat((seq_b, seq_a2, protagonist_append_ids, init_gd_input), dim=1)[:,:]
-                else:
-                    seq_a = torch.cat((seq_a, seq_a2, init_gd_input), dim=1)[:,:]
-                    seq_b = torch.cat((seq_b, seq_a2, init_gd_input), dim=1)[:,:]
-
-
+                seq_a = torch.cat((seq_a, seq_a2, init_gd_input), dim=1)[:,:]
+                seq_b = torch.cat((seq_b, seq_a2, init_gd_input), dim=1)[:,:]
 
                 # print('multicode seq_a:',seq_a)
                 # print('multicode seq_a size:',seq_a.size())
