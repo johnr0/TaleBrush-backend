@@ -706,6 +706,7 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin):
         code_1="positive",
         multi_code=None,
         protagonist = None,
+        gedi_basic=False,
         get_ll=False
     ):
         r""" Generates sequences for models with a LM head. The method currently supports greedy or penalized greedy decoding, sampling with top-k or nucleus sampling
@@ -883,6 +884,7 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin):
             code_1,
             multi_code,
             protagonist,
+            gedi_basic,
             get_ll
         )
 
@@ -956,6 +958,7 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin):
         code_1,
         multi_code,
         protagonist,
+        gedi_basic,
         get_ll
     ):
         """ Generate sequences for each example without beam search (num_beams == 1).
@@ -1054,13 +1057,18 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin):
 
                 init_gd_input = input_ids[input_ids!=bad_token_ids[1]]
                 init_gd_input = init_gd_input.reshape((1, init_gd_input.size(0)))
+
                 # print('init_gd_input size:', init_gd_input.size())
                 if protagonist is not None:
-                    seq_a = torch.cat((seq_a, seq_a2, protagonist_append_ids, init_gd_input), dim=1)[:,:]
-                    seq_b = torch.cat((seq_b, seq_a2, protagonist_append_ids, init_gd_input), dim=1)[:,:]
+                    seq_a = torch.cat((seq_a, seq_a2, protagonist_append_ids), dim=1)[:,:]
+                    seq_b = torch.cat((seq_b, seq_a2, protagonist_append_ids), dim=1)[:,:]
+                    # seq_a = torch.cat((seq_a, seq_a2, protagonist_append_ids, init_gd_input), dim=1)[:,:]
+                    # seq_b = torch.cat((seq_b, seq_a2, protagonist_append_ids, init_gd_input), dim=1)[:,:]
                 else:
-                    seq_a = torch.cat((seq_a, seq_a2, init_gd_input), dim=1)[:,:]
-                    seq_b = torch.cat((seq_b, seq_a2, init_gd_input), dim=1)[:,:]
+                    seq_a = torch.cat((seq_a, seq_a2), dim=1)[:,:]
+                    seq_b = torch.cat((seq_b, seq_a2), dim=1)[:,:]
+                    # seq_a = torch.cat((seq_a, seq_a2, init_gd_input), dim=1)[:,:]
+                    # seq_b = torch.cat((seq_b, seq_a2, init_gd_input), dim=1)[:,:]
 
 
 
