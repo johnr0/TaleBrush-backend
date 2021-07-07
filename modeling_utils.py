@@ -1097,7 +1097,8 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin):
         desired_labels = torch.zeros(input_ids.shape[0],dtype=torch.long).to(input_ids.device)
         rewards=None
         if get_ll:
-            sequence_ll = 0
+            # sequence_ll = 0
+            sequence_ll = []
 
         while cur_len < max_length:
             model_inputs = self.prepare_inputs_for_generation(input_ids, past=past)
@@ -1396,7 +1397,8 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin):
             tokens_to_add = next_token * unfinished_sents + pad_token_id * (1 - unfinished_sents)
             # print(tokens_to_add)
             if get_ll:
-                sequence_ll += next_token_logp[0,next_token]
+                # sequence_ll += next_token_logp[0,next_token]
+                sequence_ll.append(next_token_logp[0, next_token])
             input_ids = torch.cat([input_ids, tokens_to_add.unsqueeze(-1)], dim=-1)
             for eos_token_id in eos_token_ids:
                 unfinished_sents.mul_(tokens_to_add.ne(eos_token_id).long())
