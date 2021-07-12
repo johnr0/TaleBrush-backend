@@ -707,7 +707,8 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin):
         multi_code=None,
         protagonist = None,
         gedi_basic=False,
-        get_ll=False
+        get_ll=False,
+        get_logits=False
     ):
         r""" Generates sequences for models with a LM head. The method currently supports greedy or penalized greedy decoding, sampling with top-k or nucleus sampling
         and beam-search.
@@ -885,7 +886,8 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin):
             multi_code,
             protagonist,
             gedi_basic,
-            get_ll
+            get_ll, 
+            get_logits
         )
 
         if num_return_sequences != 1:
@@ -959,7 +961,8 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin):
         multi_code,
         protagonist,
         gedi_basic,
-        get_ll
+        get_ll,
+        get_logits
     ):
         """ Generate sequences for each example without beam search (num_beams == 1).
             All returned sequence are generated independantly.
@@ -1099,6 +1102,8 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin):
         if get_ll:
             # sequence_ll = 0
             sequence_ll = []
+        if get_logits:
+            sequence_logits = []
 
         while cur_len < max_length:
             model_inputs = self.prepare_inputs_for_generation(input_ids, past=past)
@@ -1116,6 +1121,8 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin):
                 next_token_logits = outputs[0][:, -1, :]
             if get_ll:
                 next_token_logp = torch.log_softmax(next_token_logits,-1)
+            if get_logits:
+                sequence_logits.append(next_token_logits)
             if not(gedi_model is None):
                 #want to compute LM loss here so feeding inputs as labels
                 if not gedi_past is None:
@@ -1419,6 +1426,8 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin):
 
         if get_ll:
             return input_ids,sequence_ll
+        elif get_logits:
+            return input_ids, sequence_logits
         else:
             return input_ids
 
