@@ -708,7 +708,8 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin):
         protagonist = None,
         gedi_basic=False,
         get_ll=False,
-        get_logits=False
+        label=None,
+        get_logits=False,
     ):
         r""" Generates sequences for models with a LM head. The method currently supports greedy or penalized greedy decoding, sampling with top-k or nucleus sampling
         and beam-search.
@@ -887,7 +888,8 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin):
             protagonist,
             gedi_basic,
             get_ll, 
-            get_logits
+            label,
+            get_logits,
         )
 
         if num_return_sequences != 1:
@@ -962,6 +964,7 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin):
         protagonist,
         gedi_basic,
         get_ll,
+        label, 
         get_logits
     ):
         """ Generate sequences for each example without beam search (num_beams == 1).
@@ -1427,6 +1430,7 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin):
         if get_ll:
             return input_ids,sequence_ll
         elif get_logits:
+            sequence_logits = torch.stack(sequence_logits, dim=2)
             return input_ids, sequence_logits
         else:
             return input_ids
