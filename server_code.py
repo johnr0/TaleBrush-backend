@@ -1,41 +1,67 @@
+from flask import request, url_for
+from flask_api import FlaskAPI, status, exceptions
+from flask_cors import CORS, cross_origin
+import torch
+import json
+
 import numpy as np
 import torch
 
-
+from modeling_gptneo import GPTNeoForCausalLM
 from modeling_gpt2 import GPT2LMHeadModel
 
+
 from transformers import (
+    GPTNeoConfig,
     GPT2Config,
     GPT2Tokenizer
 )
+import transformers
 
 from nltk import sent_tokenize
 import nltk
 nltk.download('punkt')
 
+### Loading the model
 code_desired = "true"
 code_undesired = "false"
 model_type = 'gpt2'
 gen_type = "gedi"
-gen_model_name_or_path = "gpt2-xl"
+gen_model_name_or_path = "EleutherAI/gpt-neo-2.7B"
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-MODEL_CLASSES = {"gpt2": (GPT2Config, GPT2LMHeadModel, GPT2Tokenizer),}
-config_class, model_class, tokenizer_class = MODEL_CLASSES["gpt2"]
-tokenizer = tokenizer_class.from_pretrained(gen_model_name_or_path, do_lower_case=False)
+MODEL_CLASSES = {"gptneo": (GPTNeoConfig, GPTNeoForCausalLM, GPT2Tokenizer), "gpt2": (GPT2Config, GPT2LMHeadModel, GPT2Tokenizer),}
+config_class_n, model_class_n, tokenizer_class_n = MODEL_CLASSES["gptneo"]
+config_class_2, model_class_2, tokenizer_class_2 = MODEL_CLASSES["gpt2"]
+tokenizer = tokenizer_class_n.from_pretrained('EleutherAI/gpt-neo-2.7B', do_lower_case=False, additional_special_tokens=['[Prompt]'])
 
-model = model_class.from_pretrained(gen_model_name_or_path, load_in_half_prec=True)
+model = model_class_n.from_pretrained(gen_model_name_or_path, load_in_half_prec=True)
 model = model.to(device)
 model = model.float()
+model.config.use_cache=True
+model.resize_token_embeddings(len(tokenizer))
 
-gedi_model_name_or_path = 'sst_5_delib_100_score_model'
-gedi_model = model_class.from_pretrained(gedi_model_name_or_path)
+gedi_model_name_or_path = 'fortune_gedi_test'
+gedi_model = model_class_2.from_pretrained(gedi_model_name_or_path)
 gedi_model.to(device)
+gedi_model.resize_token_embeddings(len(tokenizer))
+gedi_model.resize_token_embeddings(50258)
+wte = gedi_model.get_input_embeddings()
+wte.weight.requires_grad=False
+wte.weight[len(tokenizer)-1, :]= wte.weight[len(tokenizer)-2, :]
+gedi_model.set_input_embeddings(wte)
 
-#setting arguments for generation
+embed_cont = torch.load('./result_embedding_cont')
+embed_infill_front = torch.load('./result_embedding_infill_front')
+embed_infill_back = torch.load('./result_embedding_infill_back')
+embed_recognition = torch.load('./result_embedding_recognition')
+recognition_score = torch.load('./recog_score')
+model.set_input_embeddings(embed_cont.wte)
+
+# setting arguments for generation
 #max generation length
-gen_length = 50
+gen_length = 40
 #omega from paper, higher disc_weight means more aggressive topic steering
 disc_weight = 30
 #1 - rho from paper, should be between 0 and 1 higher filter_p means more aggressive topic steering
@@ -58,14 +84,22 @@ def cut_into_sentences(text, do_cleanup=True):
     :return: sentences.
     """
     all_sentences = []
+    # print(text)
     # sentences_raw = text.split("\n")
+    
+    text = text.replace("[Prompt] [Prompt] [Prompt] [Prompt] ", "[Prompt] [Prompt] [Prompt] ")
+    sentences_raw = text.split('[Prompt] [Prompt] [Prompt]')
+    text = sentences_raw[len(sentences_raw)-1]
+    text = text.replace("Start:", " ")
+    text = text.replace("Characters:", " ")
+    text = text.replace("Story after start:", " ")
     sentences_raw = [text.replace("\n", " ")]
     result = []
 
     for item in sentences_raw:
         sentence_in_item = sent_tokenize(item)
         for item2 in sentence_in_item:
-            all_sentences.append(item2)
+            all_sentences.append(item2.strip())
 
     if do_cleanup:
         for item in all_sentences:
@@ -75,7 +109,6 @@ def cut_into_sentences(text, do_cleanup=True):
     else:
         result = all_sentences
     return result
-
 
 
 
@@ -91,10 +124,6 @@ def generate_one_sentence(sentence, control, length=50, disc_weight=30, temperat
     """
     secondary_code = control
 
-    # disc_weight = self.disc_weight
-    # if type(extra_args) is dict and 'disc_weight' in extra_args:
-    #     disc_weight = extra_args['disc_weight']
-
     if sentence == "":
         print("Prompt is empty! Using a dummy sentence.")
         sentence = "."
@@ -108,6 +137,8 @@ def generate_one_sentence(sentence, control, length=50, disc_weight=30, temperat
     start_len = 0
     text_ids = tokenizer.encode(prompt)
     length_of_prompt_in_tokens = len(text_ids)
+    # print('text ids', text_ids)
+    
     encoded_prompts = torch.LongTensor(text_ids).unsqueeze(0).to(device)
 
     if type(control) is str:
@@ -122,6 +153,7 @@ def generate_one_sentence(sentence, control, length=50, disc_weight=30, temperat
 
     # If 1, generate sentences towards a specific topic.
     attr_class = 1
+    print(multi_code)
 
     if int(control)!=-1:
       if gpt3_id is None:
@@ -133,7 +165,8 @@ def generate_one_sentence(sentence, control, length=50, disc_weight=30, temperat
                                                   repetition_penalty=1.2,
                                                   rep_penalty_scale=10,
                                                   eos_token_ids=tokenizer.eos_token_id,
-                                                  pad_token_id=0,  # self.tokenizer.eos_token_id,
+                                                  pad_token_id=tokenizer.eos_token_id,
+                                                  bad_token_ids = tokenizer.all_special_ids,
                                                   do_sample=True,
                                                   temperature = temperature,
                                                   penalize_cond=True,
@@ -157,7 +190,8 @@ def generate_one_sentence(sentence, control, length=50, disc_weight=30, temperat
                                                   repetition_penalty=1.2,
                                                   rep_penalty_scale=10,
                                                   eos_token_ids=tokenizer.eos_token_id,
-                                                  pad_token_id=0,  # self.tokenizer.eos_token_id,
+                                                  pad_token_id=tokenizer.eos_token_id,
+                                                  bad_token_ids = tokenizer.all_special_ids,
                                                   do_sample=True,
                                                   temperature = temperature,
                                                   penalize_cond=True,
@@ -173,10 +207,7 @@ def generate_one_sentence(sentence, control, length=50, disc_weight=30, temperat
                                                   multi_code=multi_code,
                                                   gpt3_api_key=gpt3_id,
                                                   )
-      text = tokenizer.decode(generated_sequence.tolist()[0], clean_up_tokenization_spaces=True,
-                                  skip_special_tokens=True)
-
-      text = text[length_of_prompt:]
+      text = tokenizer.decode(generated_sequence.tolist()[0])
     else:
       if gpt3_id is None:
         generated_sequence = model.generate(input_ids=encoded_prompts,
@@ -187,25 +218,20 @@ def generate_one_sentence(sentence, control, length=50, disc_weight=30, temperat
                                                   repetition_penalty=1.2,
                                                   rep_penalty_scale=10,
                                                   eos_token_ids=tokenizer.eos_token_id,
-                                                  pad_token_id=0,  # self.tokenizer.eos_token_id,
+                                                  pad_token_id=tokenizer.eos_token_id,
+                                                  bad_token_ids = tokenizer.all_special_ids,
                                                   do_sample=True,
                                                   temperature = temperature, 
                                                   penalize_cond=True,
                                                   gedi_model=None,
                                                   tokenizer=tokenizer,
                                                   disc_weight=disc_weight,
-                                                  # filter_p=filter_p,
-                                                  # target_p=target_p,
                                                   class_bias=class_bias,
                                                   attr_class=attr_class,
-                                                  # code_0=code_undesired,
-                                                  # code_1=code_desired,
-                                                  # multi_code=multi_code,
                                                   )
-        text = tokenizer.decode(generated_sequence.tolist()[0], clean_up_tokenization_spaces=True,
-                                  skip_special_tokens=True)
+        text = tokenizer.decode(generated_sequence.tolist()[0])
+        
 
-        text = text[length_of_prompt:]
         
       else:
         import openai
@@ -216,8 +242,6 @@ def generate_one_sentence(sentence, control, length=50, disc_weight=30, temperat
                                  max_tokens=length,
                                  temperature=temperature,)
         text = response["choices"][0]["text"]
-    # if type(extra_args) is dict and 'get_gen_token_count' in extra_args:
-    #     return len(generated_sequence.tolist()[0])
 
     
     text = cut_into_sentences(text)
@@ -228,62 +252,212 @@ def generate_one_sentence(sentence, control, length=50, disc_weight=30, temperat
     return all_gen_text
 
 
-def continuing_generation(prompts, generation_controls, characters, temperature=0.8, gpt3_id=None, disc_weight=30):
+
+import numpy as np
+
+def continuing_generation(prompts, generation_controls, characters, temperatures, gpt3_id=None, disc_weight=30):
   """
   Explanations on controls
   prompts: The prompt to be input. This is a list of sentences. 
   generation_controls: Generation control in the list. If no control is given, -1 is given.
   
   """
+  model.set_input_embeddings(embed_cont)
+  prompts = list(prompts)
   generated = []
 
-  prompt_prepend = """###
-Character: Kelly, grandmother
-Start: Kelly found her grandmother's pizza recipe in a shoebox of memories. Kelly reminisced about how much she loved her grandmother's pizza. Kelly decided that she was going to try to make pizza.
-Story after start,: Kelly studied the recipe and gathered everything she needed. Kelly successfully made a pizza from her grandmother's recipe.
-###
-Character: Leo
-Start: Leo wore a toupee and was anxious about it. Leo decided to go out for a short walk.
-Story after start: It was a very windy day, but he wasn't too concerned. Suddenly, a strong wind came through and took his toupee! His dog leaped and caught it, and he quickly ran home.
-###
-Character: Jimmy
-Start: Jimmy was a master with his grill. He spent every weekend getting better with his grill. One day he was offered a TV show about grilling on a local channel, Jimmy accepted the job in an instant.
-Story after start: He quit his day job and spent all his time grilling.
-###
-Character: Mel, Linda
-Start: Mel had a friend, Linda, that Mel didn't know well. Mel let her over my house.
-Story after start: Linda paid rent then asked for some of it back. Linda drinks my juice and eats my food. Linda also makes a huge mess and is very sloppy. Linda got kicked out in two weeks by Mel.
-###"""
-  character_prepend = '\nCharacter:'
+  character_prepend = '[Prompt][Prompt][Prompt]'
   for idx, character in enumerate(characters):
-    character_prepend = character_prepend+' '+character
+    if idx==0:
+      character_prepend = character_prepend+character
+    else:
+      character_prepend = character_prepend+' '+character
     if idx != len(characters)-1:
       character_prepend = character_prepend + ','
-    else:
-      character_prepend = character_prepend+'\n'
 
   prompt_start_idx = 0
-  for generation_control in generation_controls:
-    # print(generation_control)
-    prompt_postpend = 'Start: '
+  for c_idx, generation_control in enumerate(generation_controls):
+    
+    temperature = temperatures[c_idx]
     while True:
+      prompt_postpend = '[Prompt][Prompt][Prompt]'
+      # prompt_postpend = 'Story: '
+
       for i in range(prompt_start_idx, len(prompts)):
         prompt_postpend = prompt_postpend + prompts[i]
         if i != len(prompts)-1:
-          # prompt_postpend = prompt_postpend + ' '
-          continue
+          prompt_postpend = prompt_postpend + ' '
+          # continue
         else:
-          prompt_postpend = prompt_postpend + '\nStory after start:'
-      prompt_input = prompt_prepend+character_prepend+prompt_postpend
+          prompt_postpend = prompt_postpend
+      
+      prompt_input = prompt_postpend+character_prepend+ '[Prompt][Prompt][Prompt]'
       prompt_encoded = tokenizer.encode(prompt_input)
       length_of_prompt_in_tokens = len(prompt_encoded)
-      if length_of_prompt_in_tokens>1024:
+      if length_of_prompt_in_tokens>2048:
         prompt_start_idx = prompt_start_idx + 1
       else:
         break
-    # print(prompt_input)
+    print(prompt_input, generation_control)
     gen_sent = generate_one_sentence(prompt_input, generation_control, temperature=temperature, gpt3_id=gpt3_id, disc_weight=disc_weight)
     prompts.append(gen_sent)
     generated.append(gen_sent)
-  print(generated)
+  
+  for gen in generated:
+    print('gen:', gen)
+    print()
   return generated
+
+
+
+def infilling_generation(pre_prompts, post_prompts, generation_controls, characters, temperatures, is_front, gpt3_id=None, disc_weight=30):
+  """
+  Explanations on controls
+  prompts: The prompt to be input. This is a list of sentences. 
+  generation_controls: Generation control in the list. If no control is given, -1 is given.
+  
+  """
+
+  pre_prompts = list(pre_prompts)
+  post_prompts = list(post_prompts)
+  right = ''
+  for idx, pp in enumerate(post_prompts):
+    right = right + pp
+    if idx!=len(post_prompts)-1:
+      right = right + ' '
+  left = ''
+  for idx, pp in enumerate(pre_prompts):
+    left = left + pp
+    if idx!=len(post_prompts)-1:
+      left = left + ' '
+  generated = ['']*len(generation_controls)
+
+  # gen_counter = 0
+  for gen_counter in range(len(generation_controls)):
+    if is_front:
+      generation_control = generation_controls[int(gen_counter/2)]
+      temperature = temperatures[int(gen_counter/2)]
+      model.set_input_embeddings(embed_infill_front)
+      prompt_input = '[Prompt][Prompt][Prompt]'+right+'[Prompt][Prompt][Prompt]'+left+'[Prompt][Prompt][Prompt][Prompt]'
+      
+      gen_sent = generate_one_sentence(prompt_input, generation_control, temperature=temperature, gpt3_id=gpt3_id, disc_weight=disc_weight)
+      generated[int(gen_counter/2)] =gen_sent
+      print(gen_sent)
+      left = left + ' ' + gen_sent
+    else:
+      generation_control = generation_controls[len(generated)-1-int(gen_counter/2)]
+      temperature = temperatures[len(generated)-1-int(gen_counter/2)]
+      model.set_input_embeddings(embed_infill_back)
+      prompt_input = '[Prompt][Prompt][Prompt]'+left+'[Prompt][Prompt][Prompt]'+right + '[Prompt][Prompt][Prompt][Prompt]' 
+      gen_sent = generate_one_sentence(prompt_input, generation_control, temperature=temperature, gpt3_id=gpt3_id, disc_weight=disc_weight)
+      generated[len(generated)-1-int(gen_counter/2)] =gen_sent
+      print(gen_sent)
+      right = gen_sent+' '+right
+
+  for gen in generated:
+    print('gen', gen)
+    print()
+  return generated
+
+def recognize_sentence_fortune(pre_context, character, target_sentence):
+  rec_input = "[Prompt][Prompt][Prompt]"+pre_context+"[Prompt][Prompt][Prompt]"+character+"[Prompt][Prompt][Prompt]"+target_sentence
+  
+  with torch.no_grad():
+    model.set_input_embeddings(embed_recognition)
+    tokenized_input = tokenizer.encode(rec_input)
+    tokenized_input = torch.LongTensor(tokenized_input).unsqueeze(0).to(device)
+    output = model.transformer(tokenized_input)
+    op= output[0].type(torch.half)
+    
+    # op=output[0].type(torch.FloatTensor).to(device)
+    logits = recognition_score(op)
+    
+    to_return = float(logits[0][len(tokenized_input[0])-1][0])
+    if to_return > 1:
+      to_return = 1
+    elif to_return <0:
+      to_return = 0
+    return to_return
+
+
+app = FlaskAPI(__name__)
+# run_with_ngrok(app)
+CORS(app, resources={r"/*": {"origins": "*"}})
+app.config['CORS_HEADERS'] = 'Content-Type'
+
+# Below is temporary function with sentiment analysis.
+# Hence, it needs to be updated later.
+@app.route('/labelSentence', methods=['GET', 'POST'])
+@cross_origin(origin='http://10.168.233.218:7082',headers=['Content-Type'])
+def sentence_analysis():
+    if request.method == 'POST':
+        print(request.data)
+        sentence = request.data['sentence']
+        pre_context = request.data['pre_context']
+        character = request.data['character']
+        # print(images, group_model, l2t, dec)
+
+        value = recognize_sentence_fortune(pre_context, character, sentence)
+        value = value * 100
+
+        return {'value': value}
+
+@app.route('/continuingGeneration', methods=['GET', 'POST'])
+@cross_origin(origin='http://10.168.233.218:7082',headers=['Content-Type'])
+def continuingGeneration():
+  if request.method == 'POST':
+      pre_context = json.loads(request.data['pre_context'])
+      controls = json.loads(request.data['controls'])
+      characters = json.loads(request.data['characters'])
+      temperature = json.loads(request.data['temperature'])
+      print(pre_context)
+      print(controls)
+      print(characters)
+      print(temperature)
+
+      # TODO update below
+      generated = continuing_generation(pre_context, controls, characters, temperature, gpt3_id=None, disc_weight=30)
+
+      # generated = ['This is a generated sentence'] * len(controls)
+      values = []
+      for gen in generated:
+        pre_context_concat = ''
+        # start_id = 0
+        # start_id = len(pre_context)-2
+        # if start_id<0:
+        #   start_id=0
+        # for idx in range(start_id, len(pre_context)):
+        #   pre_context_concat = pre_context_concat + pre_context[idx]
+        value = recognize_sentence_fortune(pre_context_concat, characters[0], gen)
+        pre_context.append(gen)
+        values.append(value*100)
+
+      return {'generated': json.dumps(generated), 'values': json.dumps(values)}
+
+@app.route('/infillingGeneration', methods=['GET', 'POST'])
+@cross_origin(origin='http://10.168.233.218:7082',headers=['Content-Type'])
+def infillingGeneration():
+  if request.method == 'POST':
+      pre_context = json.loads(request.data['pre_context'])
+      post_context = json.loads(request.data['post_context'])
+      controls = json.loads(request.data['controls'])
+      characters = json.loads(request.data['characters'])
+      temperature = json.loads(request.data['temperature'])
+      is_front = request.data['is_front']
+      print(pre_context)
+      print(post_context)
+      print(controls)
+      print(characters)
+      print(temperature)
+
+      # TODO update below
+      generated = infilling_generation(pre_context, post_context, controls, characters, temperature, is_front, gpt3_id=None, disc_weight=30)
+
+      # generated = ['This is a generated sentence'] * len(controls)
+      # it needs to be updated
+      values = sentences_analysis(generated)
+
+      return {'generated': json.dumps(generated), 'values': json.dumps(values)}
+
+if __name__=="__main__":
+    app.run(host='0.0.0.0', port=11080)
