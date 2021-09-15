@@ -42,7 +42,7 @@ model = model.float()
 model.config.use_cache=True
 model.resize_token_embeddings(len(tokenizer))
 
-gedi_model_name_or_path = 'fortune_gedi_test'
+gedi_model_name_or_path = 'fortune_gedi'
 gedi_model = model_class_2.from_pretrained(gedi_model_name_or_path)
 gedi_model.to(device)
 gedi_model.resize_token_embeddings(len(tokenizer))
