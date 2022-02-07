@@ -5,17 +5,17 @@ import torch.utils.checkpoint
 from torch import nn
 from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, MSELoss
 
-from transformer.activations import ACT2FN
-from transformer.file_utils import add_code_sample_docstrings, add_start_docstrings, add_start_docstrings_to_model_forward
-from transformer.modeling_outputs import (
+from transformers.activations import ACT2FN
+from transformers.file_utils import add_code_sample_docstrings, add_start_docstrings, add_start_docstrings_to_model_forward
+from transformers.modeling_outputs import (
     BaseModelOutputWithPast,
     CausalLMOutputWithPast,
     QuestionAnsweringModelOutput,
     SequenceClassifierOutputWithPast,
 )
 from modeling_utils import PreTrainedModel
-from transformer.utils import logging
-from transformer.utils.model_parallel_utils import assert_device_map, get_device_map
+from transformers.utils import logging
+from transformers.utils.model_parallel_utils import assert_device_map, get_device_map
 from .configuration_gptj import GPTJConfig
 
 
