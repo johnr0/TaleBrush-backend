@@ -16,7 +16,7 @@ from transformers.modeling_outputs import (
 from modeling_utils import PreTrainedModel
 from transformers.utils import logging
 from transformers.utils.model_parallel_utils import assert_device_map, get_device_map
-from .configuration_gptj import GPTJConfig
+from transformers import GPTJConfig
 
 
 logger = logging.get_logger(__name__)
