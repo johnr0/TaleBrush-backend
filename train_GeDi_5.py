@@ -93,23 +93,23 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-ALL_MODELS = sum(
-    (
-        tuple(conf.pretrained_config_archive_map.keys())
-        for conf in (
-            BertConfig,
-            XLNetConfig,
-            XLMConfig,
-            RobertaConfig,
-            DistilBertConfig,
-            AlbertConfig,
-            XLMRobertaConfig,
-            FlaubertConfig,
-            GPT2Config
-        )
-    ),
-    (),
-)
+# ALL_MODELS = sum(
+#     (
+#         tuple(conf.pretrained_config_archive_map.keys())
+#         for conf in (
+#             BertConfig,
+#             XLNetConfig,
+#             XLMConfig,
+#             RobertaConfig,
+#             DistilBertConfig,
+#             AlbertConfig,
+#             XLMRobertaConfig,
+#             FlaubertConfig,
+#             GPT2Config
+#         )
+#     ),
+#     (),
+# )
 
 MODEL_CLASSES = {
     "bert": (BertConfig, BertForSequenceClassification, BertTokenizer),
@@ -805,7 +805,7 @@ def main():
         default=None,
         type=str,
         required=True,
-        help="Path to pre-trained model or shortcut name selected in the list: " + ", ".join(ALL_MODELS),
+        help="Path to pre-trained model or shortcut name selected in the list: ", #+ ", ".join(ALL_MODELS),
     )
     parser.add_argument(
         "--task_name",
